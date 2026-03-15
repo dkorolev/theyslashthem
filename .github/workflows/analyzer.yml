@@ -1,0 +1,10 @@
+name: analyzer
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./example/analyzer/run_test_analyzer.sh
