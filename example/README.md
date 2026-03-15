@@ -9,7 +9,7 @@ This example illustrates the workflow from the main README: one part **generates
 - **`intermediate/`** — Populated by the generator: one `.rpn` and one `.golden` per input file.
 - **`analyzer/`** — Analyzer slice: code and tests. Reads each `intermediate/*.rpn`, evaluates it and checks against `intermediate/*.golden`.
 - **`e2e/`** — End-to-end test: runs generator then analyzer and asserts all pass.
-- **`expr.py`** — Shared expression/RPN logic (used by both generator and analyzer).
+- **`shared/`** — Shared expression/RPN logic (used by both generator and analyzer).
 
 ## Scripts
 

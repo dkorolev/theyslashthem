@@ -11,7 +11,7 @@ EXAMPLE_DIR = SCRIPT_DIR.parent
 INTERMEDIATE_DIR = EXAMPLE_DIR / "intermediate"
 
 sys.path.insert(0, str(EXAMPLE_DIR))
-import expr
+from shared import expr
 
 
 def analyze() -> dict:

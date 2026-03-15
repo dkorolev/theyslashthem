@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(EXAMPLE_DIR))
 sys.path.insert(0, str(GENERATOR_DIR))
 
-import expr
+from shared import expr
 
 INPUT_DIR = EXAMPLE_DIR / "input"
 INTERMEDIATE_DIR = EXAMPLE_DIR / "intermediate"
