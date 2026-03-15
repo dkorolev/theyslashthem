@@ -1,0 +1,16 @@
+theyslashthem_profiles:
+  generator:
+    dirs:
+      - example/generator
+      - example/input
+      - example/intermediate
+      - example/shared
+    github_actions:
+      - generator.yml
+  analyzer:
+    dirs:
+      - example/analyzer
+      - example/intermediate
+      - example/shared
+    github_actions:
+      - analyzer.yml

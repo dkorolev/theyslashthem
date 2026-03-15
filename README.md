@@ -43,6 +43,46 @@ Imagine one part of the project **generates** intermediate outputs and another *
 - The agent on the generator never sees the processor; the agent on the processor never sees the generator.  
 - **They never conflict** — and you merge back in a controlled way when you’re ready.
 
+## Profiles
+
+Profiles are defined in `tst.yml` at the repo root. Each profile lists:
+
+- **`dirs`** — directories and files to keep in the sliced repo (everything else is removed from history).
+- **`github_actions`** — GitHub Actions workflow filenames to keep (so only the relevant CI gates run).
+
+All root-level files (LICENSE, README, etc.) are always kept.
+
+Example `tst.yml`:
+
+```yaml
+theyslashthem_profiles:
+  generator:
+    dirs:
+      - example/generator
+      - example/input
+      - example/intermediate
+      - example/shared
+    github_actions:
+      - generator.yml
+  analyzer:
+    dirs:
+      - example/analyzer
+      - example/intermediate
+      - example/shared
+    github_actions:
+      - analyzer.yml
+```
+
+To slice the repo for a profile, run:
+
+```bash
+./tst.py <profile>
+```
+
+It creates a clone under `_tst/yyyymmdd_hhmmss_<profile>` and **spawns a subshell** with that directory as the current working directory — you are now inside the sliced clone. Set `TMP_GIT_REPO` to add a `tmp` remote for pushing.
+
+When you're done working in the sliced repo, run **`_tst/done.sh`** from inside the clone. It checks for a clean git tree, then builds a single prompt (instructions plus per-commit diffs, oldest first) and **copies it to your clipboard**. It does not exit the shell: it prints the path of the clone and tells you to **exit the shell** (e.g. type `exit`) to return to the original repo. You can then paste the prompt in the outer repo and run an agent there to apply the commits.
+
 ## Summary
 
 | You define | What the script does |
