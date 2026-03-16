@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -103,7 +104,8 @@ def main() -> int:
 
     shell = os.environ.get("SHELL", "/bin/bash")
     os.chdir(out_dir)
-    os.execv(shell, [shell])
+    shell_args = setup_shell_prompt(shell, profile_name)
+    os.execv(shell, shell_args)
 
 
 def find_repo_root(start: Path) -> Path | None:
@@ -209,6 +211,34 @@ def filter_to_paths(clone_dir: Path, keep_paths: list[str]) -> None:
     for p in keep_paths:
         args += ["--path", p]
     run_git(clone_dir, args)
+
+
+def setup_shell_prompt(shell: str, profile_name: str) -> list[str]:
+    """Configure the subshell prompt to show [tst: profile]. Returns exec args."""
+    if "zsh" in shell:
+        zdotdir = tempfile.mkdtemp(prefix="tst_")
+        home = os.path.expanduser("~")
+        for name in (".zshenv", ".zprofile", ".zlogin", ".zlogout"):
+            src = os.path.join(home, name)
+            if os.path.exists(src):
+                os.symlink(src, os.path.join(zdotdir, name))
+        with open(os.path.join(zdotdir, ".zshrc"), "w") as f:
+            f.write('[[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"\n')
+            f.write(
+                f'PROMPT="[%F{{yellow}}tst: %F{{cyan}}{profile_name}%f] $PROMPT"\n'
+            )
+        os.environ["ZDOTDIR"] = zdotdir
+        return [shell]
+    if "bash" in shell:
+        rcdir = tempfile.mkdtemp(prefix="tst_")
+        rcfile = os.path.join(rcdir, ".bashrc")
+        with open(rcfile, "w") as f:
+            f.write('[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"\n')
+            f.write(
+                f'PS1="[\\[\\033[33m\\]tst: \\[\\033[36m\\]{profile_name}\\[\\033[0m\\]] $PS1"\n'
+            )
+        return [shell, "--rcfile", rcfile]
+    return [shell]
 
 
 if __name__ == "__main__":
