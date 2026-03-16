@@ -206,7 +206,9 @@ def main() -> int:
         install_stubs(out_dir, repo_root, exclude_dirs)
 
     ensure_gitignore(out_dir)
-    if run_git(out_dir, ["status", "--porcelain"]).stdout.strip():
+    porcelain = run_git(out_dir, ["status", "--porcelain"]).stdout.strip()
+    tracked_changes = [l for l in porcelain.splitlines() if not l.startswith("??")]
+    if tracked_changes:
         run_git(out_dir, ["add", "-u"])
         run_git(out_dir, ["commit", "-m", "tst: profile setup"])
 
