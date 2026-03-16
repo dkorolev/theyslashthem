@@ -20,6 +20,7 @@ VERSION = "0.1"
 BOLD_WHITE = "\033[1;37m"
 BOLD_GREEN = "\033[1;32m"
 BOLD_BLUE = "\033[1;34m"
+BOLD_RED = "\033[1;31m"
 RESET = "\033[0m"
 GITIGNORE_ENTRY = "_tst/"
 GITIGNORE_COMMENT = "# Added by theyslashthem, `tst.py`."
@@ -81,37 +82,56 @@ def act_check(repo_root: Path, profiles: dict) -> int:
         return 1
 
     clone_dir = repo_root / "_tst" / "act_tmp"
+    # results: list of (label, passed)
+    results: list[tuple[str, bool]] = []
+
     try:
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
         run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
 
+        # --- global: the entire repo ---
         print(f"\n{BOLD_WHITE}Profile: {BOLD_BLUE}the entire repo{RESET}\n", flush=True)
         t0 = time.monotonic()
         r = subprocess.run(["act"], cwd=clone_dir)
         elapsed = time.monotonic() - t0
         print(f"\nact ran for {elapsed:.1f} seconds\n", flush=True)
-        if r.returncode != 0:
-            return 1
+        results.append(("the entire repo", r.returncode == 0))
 
+        # --- per-profile ---
         for name, profile in profiles.items():
             actions = profile.get("github_actions", [])
             if not actions:
                 continue
             print(f"\n{BOLD_WHITE}Profile: {BOLD_GREEN}{name}{RESET}\n", flush=True)
             t0 = time.monotonic()
+            profile_ok = True
             for wf in actions:
-                subprocess.run(
+                r = subprocess.run(
                     ["act", "-W", f".github/workflows/{wf}"],
                     cwd=clone_dir,
                 )
+                if r.returncode != 0:
+                    profile_ok = False
             elapsed = time.monotonic() - t0
             print(f"\nact ran for {elapsed:.1f} seconds\n", flush=True)
+            results.append((name, profile_ok))
     finally:
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
 
-    return 0
+    # --- summary ---
+    print(f"\n{BOLD_WHITE}Results:{RESET}\n", flush=True)
+    any_failed = False
+    for label, passed in results:
+        if passed:
+            status = f"{BOLD_GREEN}pass{RESET}"
+        else:
+            status = f"{BOLD_RED}FAIL{RESET}"
+            any_failed = True
+        print(f"  {label}: {status}")
+
+    return 1 if any_failed else 0
 
 
 def main() -> int:
