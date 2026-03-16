@@ -16,6 +16,11 @@ from datetime import datetime
 from pathlib import Path
 
 VERSION = "0.1"
+
+BOLD_WHITE = "\033[1;37m"
+BOLD_GREEN = "\033[1;32m"
+BOLD_BLUE = "\033[1;34m"
+RESET = "\033[0m"
 GITIGNORE_ENTRY = "_tst/"
 GITIGNORE_COMMENT = "# Added by theyslashthem, `tst.py`."
 
@@ -44,7 +49,7 @@ def loc(repo_root: Path, profiles: dict) -> int:
             shutil.rmtree(clone_dir)
         run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
 
-        print(f"\n--- entire repository ---\n", flush=True)
+        print(f"\n{BOLD_WHITE}Profile: {BOLD_BLUE}the entire repo{RESET}\n", flush=True)
         r = subprocess.run(
             "cloc --quiet . | grep -v 'github.com/AlDanial'",
             shell=True, cwd=clone_dir,
@@ -56,7 +61,7 @@ def loc(repo_root: Path, profiles: dict) -> int:
             dirs = profile.get("dirs", [])
             if not dirs:
                 continue
-            print(f"\n--- profile: {name} ---\n", flush=True)
+            print(f"\n{BOLD_WHITE}Profile: {BOLD_GREEN}{name}{RESET}\n", flush=True)
             dir_args = " ".join(str(clone_dir / d) for d in dirs)
             subprocess.run(
                 f"cloc --quiet {dir_args} | grep -v 'github.com/AlDanial'",
@@ -81,7 +86,7 @@ def act_check(repo_root: Path, profiles: dict) -> int:
             shutil.rmtree(clone_dir)
         run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
 
-        print(f"\n--- entire repository ---\n", flush=True)
+        print(f"\n{BOLD_WHITE}Profile: {BOLD_BLUE}the entire repo{RESET}\n", flush=True)
         t0 = time.monotonic()
         r = subprocess.run(["act"], cwd=clone_dir)
         elapsed = time.monotonic() - t0
@@ -93,7 +98,7 @@ def act_check(repo_root: Path, profiles: dict) -> int:
             actions = profile.get("github_actions", [])
             if not actions:
                 continue
-            print(f"\n--- profile: {name} ---\n", flush=True)
+            print(f"\n{BOLD_WHITE}Profile: {BOLD_GREEN}{name}{RESET}\n", flush=True)
             t0 = time.monotonic()
             for wf in actions:
                 subprocess.run(
