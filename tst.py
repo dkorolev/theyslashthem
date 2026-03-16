@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -62,6 +63,46 @@ def loc(repo_root: Path, profiles: dict) -> int:
     return 0
 
 
+def act_check(repo_root: Path, profiles: dict) -> int:
+    """Run GitHub Actions locally using act against a fresh clone."""
+    if not shutil.which("act"):
+        print("act is not installed.", file=sys.stderr)
+        return 1
+
+    clone_dir = repo_root / "_tst" / "act_tmp"
+    try:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+        run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
+
+        print(f"\n--- entire repository ---\n", flush=True)
+        t0 = time.monotonic()
+        r = subprocess.run(["act"], cwd=clone_dir)
+        elapsed = time.monotonic() - t0
+        print(f"\nact ran for {elapsed:.1f} seconds\n", flush=True)
+        if r.returncode != 0:
+            return 1
+
+        for name, profile in profiles.items():
+            actions = profile.get("github_actions", [])
+            if not actions:
+                continue
+            print(f"\n--- profile: {name} ---\n", flush=True)
+            t0 = time.monotonic()
+            for wf in actions:
+                subprocess.run(
+                    ["act", "-W", f".github/workflows/{wf}"],
+                    cwd=clone_dir,
+                )
+            elapsed = time.monotonic() - t0
+            print(f"\nact ran for {elapsed:.1f} seconds\n", flush=True)
+    finally:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+
+    return 0
+
+
 def main() -> int:
     print(f"theyslashthem, v{VERSION} (really alpha, MacOS only)")
 
@@ -75,6 +116,9 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--cloc":
         return loc(repo_root, profiles)
 
+    if len(sys.argv) == 2 and sys.argv[1] == "--act":
+        return act_check(repo_root, profiles)
+
     if subprocess.run(["git", "filter-repo", "--version"], capture_output=True).returncode != 0:
         print("git-filter-repo is not installed. Install it with:\n  pip install git-filter-repo", file=sys.stderr)
         return 1
@@ -82,6 +126,7 @@ def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: ./tst.py <profile>", file=sys.stderr)
         print("       ./tst.py --cloc", file=sys.stderr)
+        print("       ./tst.py --act", file=sys.stderr)
         print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
         return 1
 

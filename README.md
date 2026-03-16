@@ -89,6 +89,14 @@ To see lines-of-code counts for the entire repository and each profile:
 
 It runs `cloc` to print a summary table per profile, so you can see at a glance how large each slice is.
 
+To run GitHub Actions locally with [act](https://github.com/nektos/act) for the entire repository and each profile:
+
+```bash
+./tst.py --act
+```
+
+It clones the repo, runs `act` on all workflows, then runs each profile's workflows individually, printing how long each run took.
+
 When you're done working in the sliced repo, run **`_tst/done.sh`** from inside the clone. It checks for a clean git tree, then builds a single prompt (instructions plus per-commit diffs, oldest first) and **copies it to your clipboard**. It does not exit the shell: it prints the path of the clone and tells you to **exit the shell** (e.g. type `exit`) to return to the original repo. You can then paste the prompt in the outer repo and run an agent there to apply the commits.
 
 ## Summary
