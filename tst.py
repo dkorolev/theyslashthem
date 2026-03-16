@@ -201,10 +201,10 @@ def main() -> int:
     filter_to_paths(out_dir, keep_paths)
 
     # Copy pre-made stubs for excluded dirs.
-    exclude_dirs = profile.get("exclude_dirs", {})
+    stubs = profile.get("stubs", {})
     stub_dirs: list[str] = []
-    if exclude_dirs:
-        stub_dirs = install_stubs(out_dir, repo_root, exclude_dirs)
+    if stubs:
+        stub_dirs = install_stubs(out_dir, repo_root, stubs)
 
     ensure_gitignore(out_dir)
     porcelain = run_git(out_dir, ["status", "--porcelain"]).stdout.strip()
@@ -348,16 +348,13 @@ def copy_commits_to_clipboard(clone_dir: Path, commits: list[str]) -> int:
     return 0
 
 
-def install_stubs(clone_dir: Path, repo_root: Path, exclude_dirs: dict) -> list[str]:
-    """Copy pre-made stub directories into the clone for excluded dirs that specify one.
-    exclude_dirs maps dir name -> { stub?: path }; stub path is relative to repo root and optional.
+def install_stubs(clone_dir: Path, repo_root: Path, stubs: dict) -> list[str]:
+    """Copy pre-made stub directories into the clone for dirs that need a replacement.
+    stubs maps dir name -> path (relative to repo root) of the replacement.
     Each installed stub gets a .gitignore that ignores everything except itself.
     Returns list of installed directory names."""
     installed = []
-    for dir_name, options in exclude_dirs.items():
-        stub_path = options.get("stub") if isinstance(options, dict) else None
-        if not stub_path:
-            continue
+    for dir_name, stub_path in stubs.items():
         stub_src = repo_root / stub_path
         if not stub_src.is_dir():
             print(f"Missing stub: {stub_path}", file=sys.stderr)
