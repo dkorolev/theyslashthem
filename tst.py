@@ -200,10 +200,11 @@ def main() -> int:
 
     filter_to_paths(out_dir, keep_paths)
 
-    # Copy pre-made stubs for excluded dirs (each stub contains .gitignore so it stays untracked in the clone).
+    # Copy pre-made stubs for excluded dirs.
     exclude_dirs = profile.get("exclude_dirs", {})
+    stub_dirs: list[str] = []
     if exclude_dirs:
-        install_stubs(out_dir, repo_root, exclude_dirs)
+        stub_dirs = install_stubs(out_dir, repo_root, exclude_dirs)
 
     ensure_gitignore(out_dir)
     porcelain = run_git(out_dir, ["status", "--porcelain"]).stdout.strip()
@@ -211,6 +212,12 @@ def main() -> int:
     if tracked_changes:
         run_git(out_dir, ["add", "-u"])
         run_git(out_dir, ["commit", "-m", "tst: profile setup"])
+
+    # Commit stub .gitignore files so they become part of the baseline
+    if stub_dirs:
+        for d in stub_dirs:
+            run_git(out_dir, ["add", f"{d}/.gitignore"])
+        run_git(out_dir, ["commit", "-m", "tst: stub gitignores"])
 
     # Record the current HEAD as "root" so `git log root..HEAD` shows only new work
     root_hash = run_git(out_dir, ["rev-parse", "HEAD"]).stdout.strip()
@@ -341,10 +348,12 @@ def copy_commits_to_clipboard(clone_dir: Path, commits: list[str]) -> int:
     return 0
 
 
-def install_stubs(clone_dir: Path, repo_root: Path, exclude_dirs: dict) -> None:
+def install_stubs(clone_dir: Path, repo_root: Path, exclude_dirs: dict) -> list[str]:
     """Copy pre-made stub directories into the clone for excluded dirs that specify one.
     exclude_dirs maps dir name -> { stub?: path }; stub path is relative to repo root and optional.
-    Each installed stub gets '.' appended to its .gitignore so the directory stays untracked in the clone."""
+    Each installed stub gets a .gitignore that ignores everything except itself.
+    Returns list of installed directory names."""
+    installed = []
     for dir_name, options in exclude_dirs.items():
         stub_path = options.get("stub") if isinstance(options, dict) else None
         if not stub_path:
@@ -355,15 +364,9 @@ def install_stubs(clone_dir: Path, repo_root: Path, exclude_dirs: dict) -> None:
             sys.exit(1)
         dest = clone_dir / dir_name
         shutil.copytree(str(stub_src), str(dest))
-        gitignore = dest / ".gitignore"
-        entry = ".\n"
-        if gitignore.exists():
-            content = gitignore.read_text()
-            if entry.strip() not in content.splitlines():
-                with open(gitignore, "a") as f:
-                    f.write(entry if content.endswith("\n") else "\n" + entry)
-        else:
-            gitignore.write_text(entry)
+        (dest / ".gitignore").write_text("*\n!.gitignore\n")
+        installed.append(dir_name)
+    return installed
 
 
 def filter_to_paths(clone_dir: Path, keep_paths: list[str]) -> None:
