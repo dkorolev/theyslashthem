@@ -32,14 +32,19 @@ def load_profiles(repo_root: Path) -> dict:
     if not tst_yaml.exists():
         print("tst.yml not found in repo root.", file=sys.stderr)
         sys.exit(1)
-    r = subprocess.run(
-        ["yq", "-o=json", ".theyslashthem_profiles", str(tst_yaml)],
-        capture_output=True, text=True,
-    )
+    yq_cmd = ["yq", "-o=json", ".theyslashthem_profiles", str(tst_yaml)]
+    r = subprocess.run(yq_cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        print(f"Failed to parse tst.yml: {r.stderr}", file=sys.stderr)
+        print(f"command failed (exit {r.returncode}): {' '.join(yq_cmd)}", file=sys.stderr)
+        if r.stderr.strip():
+            print(f"  stderr: {r.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
-    data = json.loads(r.stdout)
+    try:
+        data = json.loads(r.stdout)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse yq JSON output: {e}", file=sys.stderr)
+        print(f"  raw output: {r.stdout[:500]}", file=sys.stderr)
+        sys.exit(1)
     return data if isinstance(data, dict) else {}
 
 
@@ -151,8 +156,11 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--act":
         return act_check(repo_root, profiles)
 
-    if subprocess.run(["git", "filter-repo", "--version"], capture_output=True).returncode != 0:
+    fr = subprocess.run(["git", "filter-repo", "--version"], capture_output=True, text=True)
+    if fr.returncode != 0:
         print("git-filter-repo is not installed. Install it with:\n  pip install git-filter-repo", file=sys.stderr)
+        if fr.stderr.strip():
+            print(f"  stderr: {fr.stderr.strip()}", file=sys.stderr)
         return 1
 
     if len(sys.argv) != 2:
@@ -239,9 +247,15 @@ def ensure_gitignore(repo_root: Path) -> None:
 
 
 def run_git(cwd: Path, args: list[str]) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    cmd = ["git"] + args
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if r.returncode != 0:
-        print(r.stderr, file=sys.stderr)
+        print(f"command failed (exit {r.returncode}): {' '.join(cmd)}", file=sys.stderr)
+        print(f"  cwd: {cwd}", file=sys.stderr)
+        if r.stdout.strip():
+            print(f"  stdout: {r.stdout.strip()}", file=sys.stderr)
+        if r.stderr.strip():
+            print(f"  stderr: {r.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
     return r
 
