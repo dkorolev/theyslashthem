@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# This code is MIT-licensed, and the latest version is https://github.com/dkorolev/theyslashthem
 """
 theyslashthem — slice a repo by profile (directories + GitHub gates).
 Version 0.1, really alpha. MacOS only.
