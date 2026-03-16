@@ -45,7 +45,10 @@ def loc(repo_root: Path, profiles: dict) -> int:
         run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
 
         print(f"\n--- entire repository ---\n", flush=True)
-        r = subprocess.run(["cloc", "--quiet", str(clone_dir)])
+        r = subprocess.run(
+            "cloc --quiet . | grep -v 'github.com/AlDanial'",
+            shell=True, cwd=clone_dir,
+        )
         if r.returncode != 0:
             return 1
 
@@ -54,8 +57,11 @@ def loc(repo_root: Path, profiles: dict) -> int:
             if not dirs:
                 continue
             print(f"\n--- profile: {name} ---\n", flush=True)
-            paths = [str(clone_dir / d) for d in dirs]
-            subprocess.run(["cloc", "--quiet"] + paths)
+            for d in dirs:
+                subprocess.run(
+                    "cloc --quiet . | grep -v 'github.com/AlDanial'",
+                    shell=True, cwd=clone_dir / d,
+                )
     finally:
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
