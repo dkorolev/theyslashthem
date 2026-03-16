@@ -81,6 +81,14 @@ To slice the repo for a profile, run:
 
 It creates a clone under `_tst/yyyymmdd_hhmmss_<profile>` and **spawns a subshell** with that directory as the current working directory — you are now inside the sliced clone. Set `TMP_GIT_REPO` to add a `tmp` remote for pushing.
 
+To see lines-of-code counts for the entire repository and each profile:
+
+```bash
+./tst.py --cloc
+```
+
+It runs `cloc` to print a summary table per profile, so you can see at a glance how large each slice is.
+
 When you're done working in the sliced repo, run **`_tst/done.sh`** from inside the clone. It checks for a clean git tree, then builds a single prompt (instructions plus per-commit diffs, oldest first) and **copies it to your clipboard**. It does not exit the shell: it prints the path of the clone and tells you to **exit the shell** (e.g. type `exit`) to return to the original repo. You can then paste the prompt in the outer repo and run an agent there to apply the commits.
 
 ## Summary

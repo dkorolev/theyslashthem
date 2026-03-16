@@ -35,12 +35,26 @@ def load_profiles(repo_root: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def loc(repo_root: Path, profiles: dict) -> int:
+    """Count lines of code using cloc."""
+    print(f"\n--- entire repository ---\n", flush=True)
+    r = subprocess.run(["cloc", str(repo_root)])
+    if r.returncode != 0:
+        return 1
+
+    for name, profile in profiles.items():
+        dirs = profile.get("dirs", [])
+        if not dirs:
+            continue
+        print(f"\n--- profile: {name} ---\n", flush=True)
+        paths = [str(repo_root / d) for d in dirs]
+        subprocess.run(["cloc"] + paths)
+
+    return 0
+
+
 def main() -> int:
     print(f"theyslashthem, v{VERSION} (really alpha, MacOS only)")
-
-    if subprocess.run(["git", "filter-repo", "--version"], capture_output=True).returncode != 0:
-        print("git-filter-repo is not installed. Install it with:\n  pip install git-filter-repo", file=sys.stderr)
-        return 1
 
     repo_root = find_repo_root(Path.cwd())
     if not repo_root:
@@ -49,8 +63,16 @@ def main() -> int:
 
     profiles = load_profiles(repo_root)
 
+    if len(sys.argv) == 2 and sys.argv[1] == "--cloc":
+        return loc(repo_root, profiles)
+
+    if subprocess.run(["git", "filter-repo", "--version"], capture_output=True).returncode != 0:
+        print("git-filter-repo is not installed. Install it with:\n  pip install git-filter-repo", file=sys.stderr)
+        return 1
+
     if len(sys.argv) != 2:
         print("Usage: ./tst.py <profile>", file=sys.stderr)
+        print("       ./tst.py --cloc", file=sys.stderr)
         print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
         return 1
 
