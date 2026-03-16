@@ -1,0 +1,11 @@
+name: cloc
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  cloc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y cloc
+      - run: python3 tst.py --cloc
