@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -83,7 +84,7 @@ def main() -> int:
 
     filter_to_paths(out_dir, keep_paths)
 
-    # Ensure _tst/ is gitignored in the child repo so done.sh stays untracked
+    # Ensure _tst/ is gitignored in the child repo
     ensure_gitignore(out_dir)
     if run_git(out_dir, ["status", "--porcelain"]).stdout.strip():
         run_git(out_dir, ["add", ".gitignore"])
@@ -93,8 +94,6 @@ def main() -> int:
     root_hash = run_git(out_dir, ["rev-parse", "HEAD"]).stdout.strip()
     run_git(out_dir, ["branch", "root", root_hash])
 
-    create_done_script(out_dir, repo_root)
-
     print("done")
 
     if tmp_repo:
@@ -103,9 +102,10 @@ def main() -> int:
         print("set TMP_GIT_REPO to add a 'tmp' upstream to the clone")
 
     shell = os.environ.get("SHELL", "/bin/bash")
-    os.chdir(out_dir)
     shell_args = setup_shell_prompt(shell, profile_name)
-    os.execv(shell, shell_args)
+    subprocess.run(shell_args, cwd=out_dir)
+
+    return handle_post_exit(out_dir, repo_root)
 
 
 def find_repo_root(start: Path) -> Path | None:
@@ -134,76 +134,83 @@ def run_git(cwd: Path, args: list[str]) -> subprocess.CompletedProcess:
     return r
 
 
-DONE_SCRIPT = r"""#!/usr/bin/env bash
-set -euo pipefail
+def handle_post_exit(clone_dir: Path, repo_root: Path) -> int:
+    """Check repo state after subshell exit and offer to copy commits to clipboard."""
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=clone_dir, capture_output=True, text=True,
+    )
+    if status.stdout.strip():
+        print("Repo is not clean. Commit or stash your changes first.")
+        print(f"To return to clone: cd {clone_dir.relative_to(repo_root)}")
+        return 1
 
-DONE_DIR="$(pwd)"
+    commits_out = subprocess.run(
+        ["git", "rev-list", "--reverse", "root..HEAD"],
+        cwd=clone_dir, capture_output=True, text=True,
+    )
+    commits = commits_out.stdout.strip()
+    if not commits:
+        print("No new commits.")
+        return 0
 
-# Must have a clean tree before preparing
-if [ -n "$(git status --porcelain)" ]; then
-    echo "Git tree is not clean. Commit or stash your changes first." >&2
-    exit 1
-fi
+    commit_list = commits.splitlines()
+    try:
+        answer = input(f"Copy {len(commit_list)} commit diff(s) to clipboard? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 0
+    if answer not in ("", "y", "yes"):
+        return 0
 
-# Detect clipboard command
-if command -v pbcopy &>/dev/null; then
-    CLIP=pbcopy
-elif command -v xclip &>/dev/null; then
-    CLIP="xclip -selection clipboard"
-elif command -v xsel &>/dev/null; then
-    CLIP="xsel --clipboard"
-else
-    echo "No clipboard command found (pbcopy, xclip, or xsel)." >&2
-    exit 1
-fi
-
-commits=$(git rev-list --reverse root..HEAD)
-
-if [ -z "$commits" ]; then
-    echo "No new commits on top of root."
-    exit 0
-fi
-
-{
-    echo "Apply the following commits to this repository, one at a time, in order."
-    echo "The oldest commits come first."
-    echo "Resolve any merge conflicts carefully."
-    echo "If a file does not end with a newline, add one."
-    echo ""
-    for commit in $commits; do
-        echo "~~~"
-        echo ""
-        echo "Commit:"
-        echo ""
-        echo '```'
-        git log -1 --format='%B' "$commit"
-        echo '```'
-        echo ""
-        echo '```'
-        git diff "$commit"^ "$commit"
-        echo '```'
-        echo ""
-        echo "~~~"
-        echo ""
-    done
-} | $CLIP
-
-count=$(echo "$commits" | wc -l | tr -d ' ')
-echo "Copied $count commit diff(s) to clipboard (root..$(git rev-parse --short HEAD))."
-
-RELATIVE_CLONE="${DONE_DIR#REPO_ROOT_PLACEHOLDER/}"
-echo "Exit this shell to return to the parent repo."
-echo "To return to clone:"
-echo "cd $RELATIVE_CLONE"
-""".lstrip()
+    return copy_commits_to_clipboard(clone_dir, commit_list)
 
 
-def create_done_script(clone_dir: Path, repo_root: Path) -> None:
-    tst_dir = clone_dir / "_tst"
-    tst_dir.mkdir(parents=True, exist_ok=True)
-    script = tst_dir / "done.sh"
-    script.write_text(DONE_SCRIPT.replace("REPO_ROOT_PLACEHOLDER", str(repo_root.resolve())))
-    script.chmod(0o755)
+def copy_commits_to_clipboard(clone_dir: Path, commits: list[str]) -> int:
+    """Generate commit diffs and copy to clipboard."""
+    clip_cmd: list[str] | None = None
+    for cmd, args in [
+        ("pbcopy", []),
+        ("xclip", ["-selection", "clipboard"]),
+        ("xsel", ["--clipboard"]),
+    ]:
+        if shutil.which(cmd):
+            clip_cmd = [cmd] + args
+            break
+    if not clip_cmd:
+        print("No clipboard command found (pbcopy, xclip, or xsel).", file=sys.stderr)
+        return 1
+
+    lines: list[str] = [
+        "Apply the following commits to this repository, one at a time, in order.",
+        "The oldest commits come first.",
+        "Resolve any merge conflicts carefully.",
+        "If a file does not end with a newline, add one.",
+        "",
+    ]
+    for commit in commits:
+        msg = subprocess.run(
+            ["git", "log", "-1", "--format=%B", commit],
+            cwd=clone_dir, capture_output=True, text=True,
+        ).stdout.rstrip()
+        diff = subprocess.run(
+            ["git", "diff", f"{commit}^", commit],
+            cwd=clone_dir, capture_output=True, text=True,
+        ).stdout.rstrip()
+        lines += ["~~~", "", "Commit:", "", "```", msg, "```", "", "```", diff, "```", "", "~~~", ""]
+
+    content = "\n".join(lines) + "\n"
+    proc = subprocess.run(clip_cmd, input=content, text=True)
+    if proc.returncode != 0:
+        print("Failed to copy to clipboard.", file=sys.stderr)
+        return 1
+
+    head_short = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=clone_dir, capture_output=True, text=True,
+    ).stdout.strip()
+    print(f"Copied {len(commits)} commit diff(s) to clipboard (root..{head_short}).")
+    return 0
 
 
 def filter_to_paths(clone_dir: Path, keep_paths: list[str]) -> None:
