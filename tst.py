@@ -57,11 +57,11 @@ def loc(repo_root: Path, profiles: dict) -> int:
             if not dirs:
                 continue
             print(f"\n--- profile: {name} ---\n", flush=True)
-            for d in dirs:
-                subprocess.run(
-                    "cloc --quiet . | grep -v 'github.com/AlDanial'",
-                    shell=True, cwd=clone_dir / d,
-                )
+            dir_args = " ".join(str(clone_dir / d) for d in dirs)
+            subprocess.run(
+                f"cloc --quiet {dir_args} | grep -v 'github.com/AlDanial'",
+                shell=True,
+            )
     finally:
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
