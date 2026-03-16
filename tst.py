@@ -36,19 +36,28 @@ def load_profiles(repo_root: Path) -> dict:
 
 
 def loc(repo_root: Path, profiles: dict) -> int:
-    """Count lines of code using cloc."""
-    print(f"\n--- entire repository ---\n", flush=True)
-    r = subprocess.run(["cloc", str(repo_root)])
-    if r.returncode != 0:
-        return 1
+    """Count lines of code using cloc against a fresh clone."""
+    clone_dir = repo_root / "_tst" / "cloc_tmp"
+    try:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+        run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
 
-    for name, profile in profiles.items():
-        dirs = profile.get("dirs", [])
-        if not dirs:
-            continue
-        print(f"\n--- profile: {name} ---\n", flush=True)
-        paths = [str(repo_root / d) for d in dirs]
-        subprocess.run(["cloc"] + paths)
+        print(f"\n--- entire repository ---\n", flush=True)
+        r = subprocess.run(["cloc", str(clone_dir)])
+        if r.returncode != 0:
+            return 1
+
+        for name, profile in profiles.items():
+            dirs = profile.get("dirs", [])
+            if not dirs:
+                continue
+            print(f"\n--- profile: {name} ---\n", flush=True)
+            paths = [str(clone_dir / d) for d in dirs]
+            subprocess.run(["cloc"] + paths)
+    finally:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
 
     return 0
 
