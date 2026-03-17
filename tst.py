@@ -140,6 +140,41 @@ def act_check(repo_root: Path, profiles: dict) -> int:
     return 1 if any_failed else 0
 
 
+def foreach(repo_root: Path, profiles: dict, command: str) -> int:
+    """Run a user-provided command in the whole repo and in each profile's dirs."""
+    clone_dir = repo_root / "_tst" / "foreach_tmp"
+    results: list[tuple[str, bool]] = []
+
+    try:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+        run_git(repo_root, ["clone", "--no-hardlinks", str(repo_root), str(clone_dir)])
+
+        for name in profiles:
+            print(f"\n{BOLD_WHITE}Profile: {BOLD_GREEN}{name}{RESET}\n", flush=True)
+            t0 = time.monotonic()
+            r = subprocess.run(command, shell=True, cwd=clone_dir)
+            elapsed = time.monotonic() - t0
+            print(f"\nran for {elapsed:.1f} seconds\n", flush=True)
+            results.append((name, r.returncode == 0))
+    finally:
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+
+    # --- summary ---
+    print(f"\n{BOLD_WHITE}Results:{RESET}\n", flush=True)
+    any_failed = False
+    for label, passed in results:
+        if passed:
+            status = f"{BOLD_GREEN}pass{RESET}"
+        else:
+            status = f"{BOLD_RED}FAIL{RESET}"
+            any_failed = True
+        print(f"  {label}: {status}")
+
+    return 1 if any_failed else 0
+
+
 def askclaude(repo_root: Path, profiles: dict, prompt: str = "prompt") -> int:
     """Run `claude -p "prompt"` for each profile and save output to profile.txt in a tmp dir."""
     if not shutil.which("claude"):
@@ -182,6 +217,7 @@ def main() -> int:
         print("Usage: ./tst.py <profile>", file=sys.stderr)
         print("       ./tst.py --cloc", file=sys.stderr)
         print("       ./tst.py --act", file=sys.stderr)
+        print("       ./tst.py --foreach <command>", file=sys.stderr)
         print("       ./tst.py --askclaude [prompt]", file=sys.stderr)
         print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
         return 0
@@ -191,6 +227,10 @@ def main() -> int:
 
     if len(sys.argv) == 2 and sys.argv[1] == "--act":
         return act_check(repo_root, profiles)
+
+    if len(sys.argv) >= 3 and sys.argv[1] == "--foreach":
+        command = " ".join(sys.argv[2:])
+        return foreach(repo_root, profiles, command)
 
     if len(sys.argv) >= 2 and sys.argv[1] == "--askclaude":
         prompt = sys.argv[2] if len(sys.argv) > 2 else "prompt"
@@ -207,6 +247,7 @@ def main() -> int:
         print("Usage: ./tst.py <profile>", file=sys.stderr)
         print("       ./tst.py --cloc", file=sys.stderr)
         print("       ./tst.py --act", file=sys.stderr)
+        print("       ./tst.py --foreach <command>", file=sys.stderr)
         print("       ./tst.py --askclaude [prompt]", file=sys.stderr)
         print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
         return 1
