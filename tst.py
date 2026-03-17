@@ -153,7 +153,8 @@ def foreach(repo_root: Path, profiles: dict, command: str) -> int:
         for name in profiles:
             print(f"\n{BOLD_WHITE}Profile: {BOLD_GREEN}{name}{RESET}\n", flush=True)
             t0 = time.monotonic()
-            r = subprocess.run(command, shell=True, cwd=clone_dir)
+            env = {**os.environ, "TST_PROFILE": name}
+            r = subprocess.run(command, shell=True, cwd=clone_dir, env=env)
             elapsed = time.monotonic() - t0
             print(f"\nran for {elapsed:.1f} seconds\n", flush=True)
             results.append((name, r.returncode == 0))
