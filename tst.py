@@ -140,6 +140,34 @@ def act_check(repo_root: Path, profiles: dict) -> int:
     return 1 if any_failed else 0
 
 
+def askclaude(repo_root: Path, profiles: dict, prompt: str = "prompt") -> int:
+    """Run `claude -p "prompt"` for each profile and save output to profile.txt in a tmp dir."""
+    if not shutil.which("claude"):
+        print("claude is not available (Claude CLI not found in PATH).", file=sys.stderr)
+        return 1
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = repo_root / "_tst" / f"askclaude_{stamp}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(out_dir)
+
+    for name in profiles:
+        out_file = out_dir / f"{name}.txt"
+        with open(out_file, "w") as f:
+            r = subprocess.run(
+                ["claude", "-p", prompt],
+                cwd=repo_root,
+                stdout=f,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        if r.returncode != 0 and r.stderr:
+            print(f"  {name}: stderr: {r.stderr.strip()}", file=sys.stderr)
+
+    return 0
+
+
 def main() -> int:
     print(f"theyslashthem, v{VERSION} (really alpha, MacOS only)")
 
@@ -150,11 +178,23 @@ def main() -> int:
 
     profiles = load_profiles(repo_root)
 
+    if len(sys.argv) >= 2 and sys.argv[1] in ("--help", "-h"):
+        print("Usage: ./tst.py <profile>", file=sys.stderr)
+        print("       ./tst.py --cloc", file=sys.stderr)
+        print("       ./tst.py --act", file=sys.stderr)
+        print("       ./tst.py --askclaude [prompt]", file=sys.stderr)
+        print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
+        return 0
+
     if len(sys.argv) == 2 and sys.argv[1] == "--cloc":
         return loc(repo_root, profiles)
 
     if len(sys.argv) == 2 and sys.argv[1] == "--act":
         return act_check(repo_root, profiles)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "--askclaude":
+        prompt = sys.argv[2] if len(sys.argv) > 2 else "prompt"
+        return askclaude(repo_root, profiles, prompt=prompt)
 
     fr = subprocess.run(["git", "filter-repo", "--version"], capture_output=True, text=True)
     if fr.returncode != 0:
@@ -167,6 +207,7 @@ def main() -> int:
         print("Usage: ./tst.py <profile>", file=sys.stderr)
         print("       ./tst.py --cloc", file=sys.stderr)
         print("       ./tst.py --act", file=sys.stderr)
+        print("       ./tst.py --askclaude [prompt]", file=sys.stderr)
         print(f"Profiles: {', '.join(profiles)}", file=sys.stderr)
         return 1
 
